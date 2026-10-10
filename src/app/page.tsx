@@ -1,11 +1,9 @@
 import { createClient } from '@sanity/client';
-export const dynamic = 'force-dynamic';
-
 
 const client = createClient({
   projectId: 'gwts12e8',
   dataset: 'production',
-  useCdn: false,
+  useCdn: false, 
   apiVersion: '2026-10-10',
 });
 
@@ -18,7 +16,9 @@ async function getRobloxianNews() {
     _createdAt,
     "imageUrl": mainImage.asset->url
   }`;
-  return await client.fetch(query);
+  
+  // 🚀 FIXED STEP: This tells Next.js to fetch data dynamically every time (0 seconds cache)
+  return await client.fetch(query, {}, { next: { revalidate: 0 } });
 }
 
 export default async function HomePage() {
