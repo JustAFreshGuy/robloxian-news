@@ -1,4 +1,6 @@
 import { createClient } from '@sanity/client';
+export const dynamic = 'force-dynamic';
+
 
 const client = createClient({
   projectId: 'gwts12e8',
