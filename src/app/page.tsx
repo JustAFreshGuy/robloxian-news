@@ -1,14 +1,15 @@
 import { createClient } from '@sanity/client';
-export const dynamic = 'force-dynamic';
+import { Suspense } from 'react';
 
 const client = createClient({
   projectId: 'gwts12e8',
   dataset: 'production',
-  useCdn: false, 
+  useCdn: false,
   apiVersion: '2026-10-10',
 });
 
-async function getRobloxianNews() {
+// 1. Separate component just for fetching the data
+async function NewsList() {
   const query = `*[_type == "post"] | order(_createdAt desc) {
     _id,
     title,
@@ -17,13 +18,8 @@ async function getRobloxianNews() {
     _createdAt,
     "imageUrl": mainImage.asset->url
   }`;
-  
-  // 🚀 FIXED STEP: This tells Next.js to fetch data dynamically every time (0 seconds cache)
-  return await client.fetch(query, {}, { next: { revalidate: 0 } });
-}
 
-export default async function HomePage() {
-  const posts = await getRobloxianNews();
+  const posts = await client.fetch(query, {}, { cache: 'no-store' });
 
   const getBadgeStyle = (category: string) => {
     switch (category) {
@@ -36,10 +32,71 @@ export default async function HomePage() {
     }
   };
 
+  if (!posts || posts.length === 0) {
+    return (
+      <div className="w-full text-center py-20 border border-dashed border-[#242936] rounded-lg bg-[#161920]">
+        <h3 className="text-lg font-bold text-[#94A3B8]">Waiting for incoming data logs...</h3>
+        <p className="text-gray-500 text-sm mt-1">Publish an item in your Sanity studio to push it live.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full flex flex-col gap-4">
+      {posts.map((post: any) => {
+        const badge = getBadgeStyle(post.category);
+        const postDate = new Date(post._createdAt).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+        });
+
+        return (
+          <div 
+            key={post._id} 
+            className="w-full bg-[#161920] border border-[#242936] rounded-xl p-5 flex items-center justify-between gap-8 shadow-md"
+          >
+            <div className="flex items-center gap-6 flex-1 min-w-0">
+              {post.imageUrl ? (
+                <img 
+                  src={post.imageUrl} 
+                  alt="" 
+                  className="w-80 h-44 object-cover rounded-lg bg-[#0F1115] border border-[#242936] shrink-0 shadow-lg"
+                />
+              ) : (
+                <div className="w-80 h-44 rounded-lg bg-[#0F1115] border border-[#242936] flex items-center justify-center shrink-0 text-5xl">
+                  🎮
+                </div>
+              )}
+              
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2.5">
+                  <span className={`text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md ${badge.classes}`}>
+                    {badge.text}
+                  </span>
+                  <span className="text-xs text-[#475569] font-mono">{postDate}</span>
+                </div>
+                
+                <h3 className="text-2xl font-extrabold text-white mt-2 tracking-tight line-clamp-2">
+                  {post.title}
+                </h3>
+                <p className="text-base text-[#94A3B8] mt-1.5 line-clamp-3 leading-relaxed max-w-4xl">
+                  {post.description}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// 2. Main Page layout wraps the feed in a Suspense border to satisfy the compiler
+export default function HomePage() {
   return (
     <div className="min-h-screen bg-[#0F1115] text-[#E2E8F0] font-sans selection:bg-[#00A2FF] selection:text-white">
       
-      {/* 🚀 MINIMALIST WIDESCREEN TOP NAVIGATION BAR */}
+      {/* NAVIGATION BAR */}
       <nav className="w-full bg-[#161920] border-b border-[#242936] px-8 py-4 sticky top-0 z-50 shadow-md">
         <div className="w-full flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -55,7 +112,7 @@ export default async function HomePage() {
         </div>
       </nav>
 
-      {/* 🖥️ DASHBOARD MAIN WELCOME BANNER */}
+      {/* DASHBOARD MAIN BANNER */}
       <div className="w-full bg-gradient-to-r from-[#141B2D] via-[#111827] to-[#0F1115] px-8 py-10 border-b border-[#242936]">
         <h2 className="text-3xl font-extrabold text-white tracking-tight">Community Dashboard Feed</h2>
         <p className="text-[#94A3B8] mt-1 text-sm">
@@ -63,64 +120,15 @@ export default async function HomePage() {
         </p>
       </div>
 
-      {/* 📰 MASSIVE IMAGES LIST FEED */}
+      {/* FEED LAYOUT CONTAINER */}
       <main className="w-full px-8 py-8">
-        {posts.length === 0 ? (
-          <div className="w-full text-center py-20 border border-dashed border-[#242936] rounded-lg bg-[#161920]">
-            <h3 className="text-lg font-bold text-[#94A3B8]">Waiting for incoming data logs...</h3>
-            <p className="text-gray-500 text-sm mt-1">Publish an item in your Sanity studio to push it live.</p>
+        <Suspense fallback={
+          <div className="w-full text-center py-20 text-[#94A3B8] font-medium animate-pulse">
+            Connecting to data pipeline stream...
           </div>
-        ) : (
-          <div className="w-full flex flex-col gap-4">
-            {posts.map((post: any) => {
-              const badge = getBadgeStyle(post.category);
-              const postDate = new Date(post._createdAt).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-              });
-
-              return (
-                <div 
-                  key={post._id} 
-                  className="w-full bg-[#161920] border border-[#242936] rounded-xl p-5 flex items-center justify-between gap-8 shadow-md"
-                >
-                  <div className="flex items-center gap-6 flex-1 min-w-0">
-                    
-                    {/* 🖼️ EXTRA-LARGE CINEMATIC THUMBNAIL CONTAINER */}
-                    {post.imageUrl ? (
-                      <img 
-                        src={post.imageUrl} 
-                        alt="" 
-                        className="w-80 h-44 object-cover rounded-lg bg-[#0F1115] border border-[#242936] shrink-0 shadow-lg"
-                      />
-                    ) : (
-                      <div className="w-80 h-44 rounded-lg bg-[#0F1115] border border-[#242936] flex items-center justify-center shrink-0 text-5xl">
-                        🎮
-                      </div>
-                    )}
-                    
-                    {/* Log Text Readouts */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2.5">
-                        <span className={`text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md ${badge.classes}`}>
-                          {badge.text}
-                        </span>
-                        <span className="text-xs text-[#475569] font-mono">{postDate}</span>
-                      </div>
-                      
-                      <h3 className="text-2xl font-extrabold text-white mt-2 tracking-tight line-clamp-2">
-                        {post.title}
-                      </h3>
-                      <p className="text-base text-[#94A3B8] mt-1.5 line-clamp-3 leading-relaxed max-w-4xl">
-                        {post.description}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        }>
+          <NewsList />
+        </Suspense>
       </main>
     </div>
   );
